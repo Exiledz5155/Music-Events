@@ -3,8 +3,12 @@ import selectorlib
 import smtplib, ssl
 import os
 import time
+import sqlite3
 
 URL = "http://programmer100.pythonanywhere.com/tours/"
+
+connection = sqlite3.connect("data.db")
+
 
 def scrape(url):
     """Scrape the page source from the URL"""
@@ -37,15 +41,24 @@ def send_email(message):
 
 
 def store(extracted):
-    """Stores the event in a txt file"""
-    with open("data.txt", "w") as file:
-        file.write(extracted + "\n")
-
+    """Stores the event in a SQLite Database"""
+    row = extracted.split(",")
+    row = [item.strip() for item in row]  # remove leading spaces
+    cursor = connection.cursor()
+    cursor.execute("INSERT INTO events VALUES(?,?,?)", row)
+    connection.commit()
 
 def read(extracted):
-    """Reads a txt file"""
-    with open("data.txt", "r") as file:
-        return file.read()
+    """Reads extracted content """
+    row = extracted.split(",")
+    row = [item.strip() for item in row] # remove leading spaces
+
+    band, city, date = row # assigns each index with a name
+    cursor = connection.cursor()
+    cursor.execute("SELECT * FROM events WHERE band=? AND city=? AND date=?",
+                   (band, city, date))
+    rows = cursor.fetchall()
+    return rows
 
 
 if __name__ == "__main__":
@@ -54,11 +67,11 @@ if __name__ == "__main__":
         extracted = extract(scraped)
         print(extracted)
 
-        content = read(extracted)
         # If event exists and not a duplicate, send the email and store in txt
         if extracted != "No upcoming tours":
-            if extracted not in content:
+            row = read(extracted)
+            if not row: # If read function returns an empty list
                 store(extracted)
                 send_email(message="Hey, a new event was found!")
                 print("Email was sent!")
-        time.sleep(300) # Checks for events every 5 minutes
+        time.sleep(2) # Checks for events every 5 minutes
